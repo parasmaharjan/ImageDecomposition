@@ -14,7 +14,7 @@ import Wavelet
 
 # Stage 1
 parser1 = argparse.ArgumentParser(description='EDSR 1')
-parser1.add_argument('--n_resblocks', type=int, default=32,
+parser1.add_argument('--n_resblocks', type=int, default=16,
                     help='number of residual blocks')
 parser1.add_argument('--n_feats', type=int, default=64,
                     help='number of feature maps')
@@ -93,16 +93,18 @@ parser5.add_argument('--o_colors', type=int, default=3,
 args5 = parser5.parse_args()
 
 # Directories
-input_dir = '../LearningToSeeInDark/dataset/Sony/short/'
-gt_dir = '../LearningToSeeInDark/dataset/Sony/long/'
+input_dir  = '../dataset/Sony/short/'
+gt_dir     = '../dataset/Sony/long/'
 result_dir = 'Result/'
-model_dir = 'ckpt/'
-test_name = ''
-filter = 'haar' #'bior1.3'
+model_dir  = 'ckpt/'
+test_name  = ''
+filter     = 'haar'
+cluster    = True
+lf         = True
 
 # Parameters
-ps = 256
-save_freq = 15
+ps            = 256
+save_freq     = 25
 learning_rate = 1e-4
 
 # Check if cuda available
@@ -144,35 +146,37 @@ def reduce_mean(out_im, gt_im):
 
 g_loss = np.zeros((5000, 1))
 
-allfolders = glob.glob('./result/*0')
-lastepoch = 0
-for folder in allfolders:
-    lastepoch = np.maximum(lastepoch, int(folder[-4:]))
+if cluster:
+    input_images = {}
+    input_images['300'] = [None]*len(train_ids)
+    input_images['250'] = [None]*len(train_ids)
+    input_images['100'] = [None]*len(train_ids)
+    gt_images = [None] * 6000
 
 #LL
 model_ll = EDSR(args1)
-model_ll.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_ll_add_original_sony_e0640.pth'))
+model_ll.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_ll_add_original_sony_e2000.pth'))
 model_ll.cuda()
 #LH
 model_lh = EDSR(args2)
-model_lh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_lh_sony_e0074.pth'))
+model_lh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_lh_sony_e0100.pth'))
 model_lh.cuda()
 #HL
 model_hl = EDSR(args3)
-model_hl.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_hl_sony_e0074.pth'))
+model_hl.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_hl_sony_e0100.pth'))
 model_hl.cuda()
 #HH
 model_hh = EDSR(args4)
-model_hh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_hh_sony_e0074.pth'))
+model_hh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_hh_sony_e0100.pth'))
 model_hh.cuda()
 
 # combine network
 model = EDSR(args5)
-#model_hh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_combine_sony_e0079.pth'))
+#model_hh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_combine_sony_e2000.pth'))
 model.cuda()
 opt = optim.Adam(model.parameters(), lr=learning_rate)
 
-for epoch in range(lastepoch, 101):
+for epoch in range(0, 2001):
     cnt = 0
 
     for ind in np.random.permutation(len(train_ids)):
@@ -192,21 +196,39 @@ for epoch in range(lastepoch, 101):
         st = time.time()
         cnt += 1
 
-        raw = rawpy.imread(in_path)
-        input_images = np.expand_dims(pack_raw(raw), axis=0) * ratio
+        if cluster:
+            if input_images[str(ratio)[0:3]][ind] is None:
+                raw = rawpy.imread(in_path)
+                input_images[str(ratio)[0:3]][ind] = np.expand_dims(pack_raw(raw), axis=0) * ratio
 
-        gt_raw = rawpy.imread(gt_path)
-        im = gt_raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
-        gt_images = np.expand_dims(np.float32(im / 65535.0), axis=0)
+                gt_raw = rawpy.imread(gt_path)
+                im = gt_raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
+                gt_images[ind] = np.expand_dims(np.float32(im / 65535.0), axis=0)
+            # crop
+            H = input_images[str(ratio)[0:3]][ind].shape[1]
+            W = input_images[str(ratio)[0:3]][ind].shape[2]
 
-        # crop
-        H = input_images.shape[1]
-        W = input_images.shape[2]
+            xx = np.random.randint(0, W - ps)
+            yy = np.random.randint(0, H - ps)
+            input_patch = input_images[str(ratio)[0:3]][ind][:, yy:yy + ps, xx:xx + ps, :]
+            gt_patch = gt_images[ind][:, yy * 2:yy * 2 + ps * 2, xx * 2:xx * 2 + ps * 2, :]
+        else:
+            raw = rawpy.imread(in_path)
+            input_images = np.expand_dims(pack_raw(raw), axis=0) * ratio
 
-        xx = np.random.randint(0, W - ps)
-        yy = np.random.randint(0, H - ps)
-        input_patch = input_images[:, yy:yy + ps, xx:xx + ps, :]
-        gt_patch = gt_images[:, yy * 2:yy * 2 + ps * 2, xx * 2:xx * 2 + ps * 2, :]
+            gt_raw = rawpy.imread(gt_path)
+            im = gt_raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
+            gt_images = np.expand_dims(np.float32(im / 65535.0), axis=0)
+
+            # crop
+            H = input_images.shape[1]
+            W = input_images.shape[2]
+
+            xx = np.random.randint(0, W - ps)
+            yy = np.random.randint(0, H - ps)
+            input_patch = input_images[:, yy:yy + ps, xx:xx + ps, :]
+            gt_patch = gt_images[:, yy * 2:yy * 2 + ps * 2, xx * 2:xx * 2 + ps * 2, :]
+
 
         if np.random.randint(2, size=1)[0] == 1:  # random flip
             input_patch = np.flip(input_patch, axis=1)
@@ -255,11 +277,9 @@ for epoch in range(lastepoch, 101):
         LH = torch.from_numpy(np.minimum(np.maximum(LH, 0), 1)).permute(0, 3, 1, 2).cuda()
         HL = torch.from_numpy(np.minimum(np.maximum(HL, 0), 1)).permute(0, 3, 1, 2).cuda()
         HH = torch.from_numpy(np.minimum(np.maximum(HH, 0), 1)).permute(0, 3, 1, 2).cuda()
-        #in_img = Wavelet.combine3ch(LL, LH, HL, HH)
         in_img = torch.cat((LL, LH, HL, HH, in_img_ori), 1)
         model.train()
         model.zero_grad()
-        #in_img = torch.from_numpy(np.expand_dims(in_img, axis=0)).permute(0, 3, 1, 2).cuda()
         out_img = model(in_img)
         loss = reduce_mean(out_img, gt_img)
         loss.backward()
@@ -267,8 +287,7 @@ for epoch in range(lastepoch, 101):
 
         g_loss[ind] = loss.cpu().data
 
-        print("%d %d Loss=%.3f Time=%.3f" % (
-                epoch, cnt, np.mean(g_loss[np.where(g_loss)]), time.time() - st))
+        print("%d %d Loss=%.3f Time=%.3f" % (epoch, cnt, np.mean(g_loss[np.where(g_loss)]), time.time() - st))
 
 
     if epoch % save_freq == 0:
@@ -352,14 +371,3 @@ for epoch in range(lastepoch, 101):
         torch.save(model.state_dict(), model_dir + 'Wavelet_add_original_sony_e%04d.pth' % epoch)
 
 print("Done...")
-
-output = out_img.permute(0, 2, 3, 1).cpu().data.numpy()
-output = np.minimum(np.maximum(output, 0), 1)
-plt.figure(1)
-plt.imshow(output[0,:,:,:])
-plt.figure(2)
-plt.imshow(gt_patch[0,:,:,:])
-
-
-print('mean psnr: ', np.mean(psnr))
-print('mean ssim: ', np.mean(ssim))
