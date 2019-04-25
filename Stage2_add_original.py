@@ -7,14 +7,14 @@ import glob
 import torch
 import torch.optim as optim
 import matplotlib.pyplot as plt
-from EDSR import EDSR, EDSR_
+from EDSR import EDSR
 import argparse
 import skimage.measure as skm
 import Wavelet
 
 # Stage 1
 parser1 = argparse.ArgumentParser(description='EDSR 1')
-parser1.add_argument('--n_resblocks', type=int, default=16,
+parser1.add_argument('--n_resblocks', type=int, default=32,
                     help='number of residual blocks')
 parser1.add_argument('--n_feats', type=int, default=64,
                     help='number of feature maps')
@@ -36,7 +36,7 @@ parser2.add_argument('--n_feats', type=int, default=64,
                     help='number of feature maps')
 parser2.add_argument('--res_scale', type=float, default=1,
                     help='residual scaling')
-parser2.add_argument('--scale', type=str, default=2,
+parser2.add_argument('--scale', type=str, default=1,
                     help='super resolution scale')
 parser2.add_argument('--n_colors', type=int, default=4,
                     help='number of input color channels to use')
@@ -52,7 +52,7 @@ parser3.add_argument('--n_feats', type=int, default=64,
                     help='number of feature maps')
 parser3.add_argument('--res_scale', type=float, default=1,
                     help='residual scaling')
-parser3.add_argument('--scale', type=str, default=2,
+parser3.add_argument('--scale', type=str, default=1,
                     help='super resolution scale')
 parser3.add_argument('--n_colors', type=int, default=4,
                     help='number of input color channels to use')
@@ -68,7 +68,7 @@ parser4.add_argument('--n_feats', type=int, default=64,
                     help='number of feature maps')
 parser4.add_argument('--res_scale', type=float, default=1,
                     help='residual scaling')
-parser4.add_argument('--scale', type=str, default=2,
+parser4.add_argument('--scale', type=str, default=1,
                     help='super resolution scale')
 parser4.add_argument('--n_colors', type=int, default=4,
                     help='number of input color channels to use')
@@ -93,17 +93,16 @@ parser5.add_argument('--o_colors', type=int, default=3,
 args5 = parser5.parse_args()
 
 # Directories
-input_dir  = '../dataset/Sony/short/'
-gt_dir     = '../dataset/Sony/long/'
+input_dir  = '../Dataset/Sony/Sony/short/'
+gt_dir     = '../Dataset/Sony/Sony/long/'
 result_dir = 'Result/'
 model_dir  = 'ckpt/'
 test_name  = ''
 filter     = 'haar'
-cluster    = True
-lf         = True
+cluster    = False
 
 # Parameters
-ps            = 256
+ps            = 512
 save_freq     = 25
 learning_rate = 1e-4
 
@@ -155,19 +154,19 @@ if cluster:
 
 #LL
 model_ll = EDSR(args1)
-model_ll.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_ll_add_original_sony_e2000.pth'))
+model_ll.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_raw_ll_sony_e1200.pth'))
 model_ll.cuda()
 #LH
 model_lh = EDSR(args2)
-model_lh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_lh_sony_e0100.pth'))
+model_lh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_raw_lh_sony_e0065.pth'))
 model_lh.cuda()
 #HL
 model_hl = EDSR(args3)
-model_hl.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_hl_sony_e0100.pth'))
+model_hl.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_raw_hl_sony_e0065.pth'))
 model_hl.cuda()
 #HH
 model_hh = EDSR(args4)
-model_hh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_hh_sony_e0100.pth'))
+model_hh.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_raw_hh_sony_e0065.pth'))
 model_hh.cuda()
 
 # combine network
@@ -176,7 +175,7 @@ model = EDSR(args5)
 model.cuda()
 opt = optim.Adam(model.parameters(), lr=learning_rate)
 
-for epoch in range(0, 2001):
+for epoch in range(0, 1):
     cnt = 0
 
     for ind in np.random.permutation(len(train_ids)):
@@ -243,13 +242,9 @@ for epoch in range(0, 2001):
         input_patch = np.minimum(input_patch, 1.0)
         gt_patch = np.maximum(gt_patch, 0.0)
 
-        (in_ll, in_lh, in_hl, in_hh) = Wavelet.decompose4ch(input_patch[0, :, :, :], filter)
         (gt_ll, gt_lh, gt_hl, gt_hh) = Wavelet.decompose3ch(gt_patch[0, :, :, :], filter)
 
-        in_img_ll = torch.from_numpy(input_patch).permute(0, 3, 1, 2).cuda()
-        in_img_lh = torch.from_numpy(np.expand_dims(in_lh, axis=0)).permute(0, 3, 1, 2).cuda()
-        in_img_hl = torch.from_numpy(np.expand_dims(in_hl, axis=0)).permute(0, 3, 1, 2).cuda()
-        in_img_hh = torch.from_numpy(np.expand_dims(in_hh, axis=0)).permute(0, 3, 1, 2).cuda()
+        in_img = torch.from_numpy(input_patch).permute(0, 3, 1, 2).cuda()
         in_img_ori = torch.from_numpy(input_patch).permute(0, 3, 1, 2).cuda()
 
         gt_img_ll = torch.from_numpy(np.expand_dims(gt_ll, axis=0)).permute(0, 3, 1, 2).cuda()
@@ -261,23 +256,15 @@ for epoch in range(0, 2001):
         # Stage 1
         with torch.no_grad():
             model_ll.eval()
-            out_img_ll = model_ll(in_img_ll)
+            out_img_ll = model_ll(in_img)
             model_lh.eval()
-            out_img_lh = model_lh(in_img_lh)
+            out_img_lh = model_lh(in_img)
             model_hl.eval()
-            out_img_hl = model_hl(in_img_hl)
+            out_img_hl = model_hl(in_img)
             model_hh.eval()
-            out_img_hh = model_hh(in_img_hh)
+            out_img_hh = model_hh(in_img)
 
-        LL, LH, HL, HH = out_img_ll.permute(0, 2, 3, 1).cpu().data.numpy(), \
-                         out_img_lh.permute(0, 2, 3, 1).cpu().data.numpy(), \
-                         out_img_hl.permute(0, 2, 3, 1).cpu().data.numpy(), \
-                         out_img_hh.permute(0, 2, 3, 1).cpu().data.numpy()
-        LL = torch.from_numpy(np.minimum(np.maximum(LL, 0), 1)).permute(0, 3, 1, 2).cuda()
-        LH = torch.from_numpy(np.minimum(np.maximum(LH, 0), 1)).permute(0, 3, 1, 2).cuda()
-        HL = torch.from_numpy(np.minimum(np.maximum(HL, 0), 1)).permute(0, 3, 1, 2).cuda()
-        HH = torch.from_numpy(np.minimum(np.maximum(HH, 0), 1)).permute(0, 3, 1, 2).cuda()
-        in_img = torch.cat((LL, LH, HL, HH, in_img_ori), 1)
+        in_img = torch.cat((out_img_ll, out_img_lh, out_img_hl, out_img_hh, in_img_ori), 1)
         model.train()
         model.zero_grad()
         out_img = model(in_img)
@@ -289,8 +276,11 @@ for epoch in range(0, 2001):
 
         print("%d %d Loss=%.3f Time=%.3f" % (epoch, cnt, np.mean(g_loss[np.where(g_loss)]), time.time() - st))
 
-
     if epoch % save_freq == 0:
+        if not os.path.isdir(model_dir):
+            os.makedirs(model_dir)
+        if not os.path.isdir(result_dir + '%04d' % epoch):
+            os.makedirs(result_dir + '%04d' % epoch)
         psnr = []
         ssim = []
         with torch.no_grad():
@@ -310,44 +300,22 @@ for epoch in range(0, 2001):
 
                     raw = rawpy.imread(in_path)
                     input_full = np.expand_dims(pack_raw(raw), axis=0) * ratio
-                    input_full = input_full[:, :512, :512, :]
-
-                    im = raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
-                    im = im[:1024,:1024]
-                    scale_full = np.expand_dims(np.float32(im / 65535.0), axis=0)
-                    # scale_full = np.minimum(scale_full, 1.0)
+                    #input_full = input_full[:, :512, :512, :]
 
                     gt_raw = rawpy.imread(gt_path)
                     im = gt_raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
-                    im = im[:1024, :1024]
+                    #im = im[:1024, :1024]
                     gt_full = np.expand_dims(np.float32(im / 65535.0), axis=0)
 
                     input_full = np.minimum(input_full, 1.0)
 
-                    #in_img = torch.from_numpy(input_full).permute(0, 3, 1, 2).to(device)
-
-                    (in_ll, in_lh, in_hl, in_hh) = Wavelet.decompose4ch(input_full[0, :, :, :], filter)
-                    (gt_ll, gt_lh, gt_hl, gt_hh) = Wavelet.decompose3ch(gt_full[0, :, :, :], filter)
-
-                    in_img_ll = torch.from_numpy(input_full).permute(0, 3, 1, 2).cuda()
-                    in_img_lh = torch.from_numpy(np.expand_dims(in_lh, axis=0)).permute(0, 3, 1, 2).cuda()
-                    in_img_hl = torch.from_numpy(np.expand_dims(in_hl, axis=0)).permute(0, 3, 1, 2).cuda()
-                    in_img_hh = torch.from_numpy(np.expand_dims(in_hh, axis=0)).permute(0, 3, 1, 2).cuda()
                     in_img_ori = torch.from_numpy(input_full).permute(0, 3, 1, 2).cuda()
-                    out_img_ll = model_ll(in_img_ll)
-                    out_img_lh = model_lh(in_img_lh)
-                    out_img_hl = model_hl(in_img_hl)
-                    out_img_hh = model_hh(in_img_hh)
+                    out_img_ll = model_ll(in_img_ori)
+                    out_img_lh = model_lh(in_img_ori)
+                    out_img_hl = model_hl(in_img_ori)
+                    out_img_hh = model_hh(in_img_ori)
 
-                    LL, LH, HL, HH = out_img_ll.permute(0, 2, 3, 1).cpu().data.numpy(), \
-                                     out_img_lh.permute(0, 2, 3, 1).cpu().data.numpy(), \
-                                     out_img_hl.permute(0, 2, 3, 1).cpu().data.numpy(), \
-                                     out_img_hh.permute(0, 2, 3, 1).cpu().data.numpy()
-                    LL = torch.from_numpy(np.minimum(np.maximum(LL, 0), 1)).permute(0, 3, 1, 2).cuda()
-                    LH = torch.from_numpy(np.minimum(np.maximum(LH, 0), 1)).permute(0, 3, 1, 2).cuda()
-                    HL = torch.from_numpy(np.minimum(np.maximum(HL, 0), 1)).permute(0, 3, 1, 2).cuda()
-                    HH = torch.from_numpy(np.minimum(np.maximum(HH, 0), 1)).permute(0, 3, 1, 2).cuda()
-                    in_img = torch.cat((LL, LH, HL, HH, in_img_ori), 1)
+                    in_img = torch.cat((out_img_ll, out_img_lh, out_img_hl, out_img_hh, in_img_ori), 1)
                     model.eval()
                     out_img = model(in_img)
                     output = out_img.permute(0, 2, 3, 1).cpu().data.numpy()
@@ -355,9 +323,6 @@ for epoch in range(0, 2001):
 
                     output = output[0, :, :, :]
                     gt_full = gt_full[0, :, :, :]
-                    scale_full = scale_full[0, :, :, :]
-                    origin_full = scale_full
-                    scale_full = scale_full * np.mean(gt_full) / np.mean(scale_full)
 
                     psnr.append(skm.compare_psnr(gt_full[:, :, :], output[:, :, :]))
                     ssim.append(skm.compare_ssim(gt_full[:, :, :], output[:, :, :], multichannel=True))
@@ -365,9 +330,10 @@ for epoch in range(0, 2001):
 
                     temp = np.concatenate((gt_full, output), axis=1)
                     scipy.misc.toimage(temp * 255, high=255, low=0, cmin=0, cmax=255).save(
-                        result_dir + '%05d_00_train_%d.jpg' % (test_id, ratio))
+                        result_dir + '%04d/%05d_00_train_%d.jpg' % (epoch, test_id, ratio))
+                    torch.cuda.empty_cache()
         print('mean psnr: ', np.mean(psnr))
         print('mean ssim: ', np.mean(ssim))
-        torch.save(model.state_dict(), model_dir + 'Wavelet_add_original_sony_e%04d.pth' % epoch)
+    torch.save(model.state_dict(), model_dir + 'Wavelet_enhancement_sony_e%04d.pth' % epoch)
 
 print("Done...")

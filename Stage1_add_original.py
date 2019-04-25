@@ -83,7 +83,7 @@ model_dir  = 'ckpt/'
 test_name  = 'Stage1/'
 filter     = 'haar'
 cluster    = False
-lf         = 0  # 0: ll, 1: lh, 2: hl, 3: hh
+lf         = False  # 0: ll, 1: lh, 2: hl, 3: hh
 
 # Parameters
 ps            = 256
