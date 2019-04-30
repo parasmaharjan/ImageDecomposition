@@ -93,8 +93,8 @@ parser5.add_argument('--o_colors', type=int, default=3,
 args5 = parser5.parse_args()
 
 # Directories
-input_dir  = '../Dataset/Sony/Sony/short/'
-gt_dir     = '../Dataset/Sony/Sony/long/'
+input_dir  = '../dataset/Sony/short/'
+gt_dir     = '../dataset/Sony/long/'
 result_dir = 'Result/'
 model_dir  = 'ckpt/'
 test_name  = ''
@@ -154,7 +154,7 @@ if cluster:
 
 #LL
 model_ll = EDSR(args1)
-model_ll.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_raw_ll_sony_e1200.pth'))
+model_ll.load_state_dict(torch.load(model_dir + test_name + 'Wavelet_raw_ll_sony_e2000.pth'))
 model_ll.cuda()
 #LH
 model_lh = EDSR(args2)
@@ -175,7 +175,7 @@ model = EDSR(args5)
 model.cuda()
 opt = optim.Adam(model.parameters(), lr=learning_rate)
 
-for epoch in range(0, 1):
+for epoch in range(0, 2001):
     cnt = 0
 
     for ind in np.random.permutation(len(train_ids)):
@@ -279,61 +279,61 @@ for epoch in range(0, 1):
     if epoch % save_freq == 0:
         if not os.path.isdir(model_dir):
             os.makedirs(model_dir)
-        if not os.path.isdir(result_dir + '%04d' % epoch):
-            os.makedirs(result_dir + '%04d' % epoch)
-        psnr = []
-        ssim = []
-        with torch.no_grad():
-            for test_id in test_ids:
+       # if not os.path.isdir(result_dir + '%04d' % epoch):
+       #     os.makedirs(result_dir + '%04d' % epoch)
+       # psnr = []
+       # ssim = []
+       # with torch.no_grad():
+       #     for test_id in test_ids:
                 # test the first image in each sequence
-                in_files = glob.glob(input_dir + '%05d_00*.ARW' % test_id)
-                for k in range(len(in_files)):
-                    in_path = in_files[k]
-                    _, in_fn = os.path.split(in_path)
-                    print(in_fn)
-                    gt_files = glob.glob(gt_dir + '%05d_00*.ARW' % test_id)
-                    gt_path = gt_files[0]
-                    _, gt_fn = os.path.split(gt_path)
-                    in_exposure = float(in_fn[9:-5])
-                    gt_exposure = float(gt_fn[9:-5])
-                    ratio = min(gt_exposure / in_exposure, 300)
+       #         in_files = glob.glob(input_dir + '%05d_00*.ARW' % test_id)
+       #         for k in range(len(in_files)):
+       #             in_path = in_files[k]
+       #             _, in_fn = os.path.split(in_path)
+       #             print(in_fn)
+       #             gt_files = glob.glob(gt_dir + '%05d_00*.ARW' % test_id)
+       #             gt_path = gt_files[0]
+       #             _, gt_fn = os.path.split(gt_path)
+       #             in_exposure = float(in_fn[9:-5])
+       #             gt_exposure = float(gt_fn[9:-5])
+       #             ratio = min(gt_exposure / in_exposure, 300)
 
-                    raw = rawpy.imread(in_path)
-                    input_full = np.expand_dims(pack_raw(raw), axis=0) * ratio
+       #             raw = rawpy.imread(in_path)
+       #             input_full = np.expand_dims(pack_raw(raw), axis=0) * ratio
                     #input_full = input_full[:, :512, :512, :]
 
-                    gt_raw = rawpy.imread(gt_path)
-                    im = gt_raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
+       #             gt_raw = rawpy.imread(gt_path)
+       #             im = gt_raw.postprocess(use_camera_wb=True, half_size=False, no_auto_bright=True, output_bps=16)
                     #im = im[:1024, :1024]
-                    gt_full = np.expand_dims(np.float32(im / 65535.0), axis=0)
+       #             gt_full = np.expand_dims(np.float32(im / 65535.0), axis=0)
 
-                    input_full = np.minimum(input_full, 1.0)
+       #             input_full = np.minimum(input_full, 1.0)
 
-                    in_img_ori = torch.from_numpy(input_full).permute(0, 3, 1, 2).cuda()
-                    out_img_ll = model_ll(in_img_ori)
-                    out_img_lh = model_lh(in_img_ori)
-                    out_img_hl = model_hl(in_img_ori)
-                    out_img_hh = model_hh(in_img_ori)
+       #             in_img_ori = torch.from_numpy(input_full).permute(0, 3, 1, 2).cuda()
+       #             out_img_ll = model_ll(in_img_ori)
+       #             out_img_lh = model_lh(in_img_ori)
+       #             out_img_hl = model_hl(in_img_ori)
+       #             out_img_hh = model_hh(in_img_ori)
 
-                    in_img = torch.cat((out_img_ll, out_img_lh, out_img_hl, out_img_hh, in_img_ori), 1)
-                    model.eval()
-                    out_img = model(in_img)
-                    output = out_img.permute(0, 2, 3, 1).cpu().data.numpy()
-                    output = np.minimum(np.maximum(output, 0), 1)
+       #             in_img = torch.cat((out_img_ll, out_img_lh, out_img_hl, out_img_hh, in_img_ori), 1)
+       #             model.eval()
+       #             out_img = model(in_img)
+       #             output = out_img.permute(0, 2, 3, 1).cpu().data.numpy()
+       #             output = np.minimum(np.maximum(output, 0), 1)
 
-                    output = output[0, :, :, :]
-                    gt_full = gt_full[0, :, :, :]
+       #             output = output[0, :, :, :]
+       #             gt_full = gt_full[0, :, :, :]
 
-                    psnr.append(skm.compare_psnr(gt_full[:, :, :], output[:, :, :]))
-                    ssim.append(skm.compare_ssim(gt_full[:, :, :], output[:, :, :], multichannel=True))
-                    print('psnr: ', psnr[-1], 'ssim: ', ssim[-1])
+       #             psnr.append(skm.compare_psnr(gt_full[:, :, :], output[:, :, :]))
+       #             ssim.append(skm.compare_ssim(gt_full[:, :, :], output[:, :, :], multichannel=True))
+       #             print('psnr: ', psnr[-1], 'ssim: ', ssim[-1])
 
-                    temp = np.concatenate((gt_full, output), axis=1)
-                    scipy.misc.toimage(temp * 255, high=255, low=0, cmin=0, cmax=255).save(
-                        result_dir + '%04d/%05d_00_train_%d.jpg' % (epoch, test_id, ratio))
-                    torch.cuda.empty_cache()
-        print('mean psnr: ', np.mean(psnr))
-        print('mean ssim: ', np.mean(ssim))
-    torch.save(model.state_dict(), model_dir + 'Wavelet_enhancement_sony_e%04d.pth' % epoch)
+                    # temp = np.concatenate((gt_full, output), axis=1)
+                    # scipy.misc.toimage(temp * 255, high=255, low=0, cmin=0, cmax=255).save(
+                    #     result_dir + '%04d/%05d_00_train_%d.jpg' % (epoch, test_id, ratio))
+       #             torch.cuda.empty_cache()
+       # print('mean psnr: ', np.mean(psnr))
+       # print('mean ssim: ', np.mean(ssim))
+    	torch.save(model.state_dict(), model_dir + 'Wavelet_enhancement_sony_e%04d.pth' % epoch)
 
 print("Done...")

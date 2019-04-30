@@ -13,7 +13,7 @@ import Wavelet
 
 # Stage 1
 parser1 = argparse.ArgumentParser(description='EDSR 1')
-parser1.add_argument('--n_resblocks', type=int, default=16,
+parser1.add_argument('--n_resblocks', type=int, default=8,
                     help='number of residual blocks')
 parser1.add_argument('--n_feats', type=int, default=64,
                     help='number of feature maps')
@@ -76,17 +76,17 @@ parser4.add_argument('--o_colors', type=int, default=3,
 args4 = parser4.parse_args()
 
 # Directories
-input_dir  = '../Dataset/Sony/Sony/short/'
-gt_dir     = '../Dataset/Sony/Sony/long/'
+input_dir  = '../dataset/Sony/short/'
+gt_dir     = '../dataset/Sony/long/'
 result_dir = 'result_Sony/'
 model_dir  = 'ckpt/'
 test_name  = 'Stage1/'
 filter     = 'haar'
-cluster    = False
-lf         = False  # 0: ll, 1: lh, 2: hl, 3: hh
+cluster    = True
+lf         = True  # 0: ll, 1: lh, 2: hl, 3: hh
 
 # Parameters
-ps            = 256
+ps            = 512
 save_freq     = 25
 learning_rate = 1e-4
 
@@ -293,11 +293,11 @@ for epoch in range(0, 2001):
             if not os.path.isdir(model_dir):
                os.makedirs(model_dir)
             # save model
-            # if lf:
-            #     torch.save(model_ll.state_dict(), model_dir + 'Wavelet_ll_sony_e%04d.pth' % epoch)
-            # else:
-            #     torch.save(model_lh.state_dict(), model_dir + 'Wavelet_lh_sony_e%04d.pth' % epoch)
-            #     torch.save(model_hl.state_dict(), model_dir + 'Wavelet_hl_sony_e%04d.pth' % epoch)
-            #     torch.save(model_hh.state_dict(), model_dir + 'Wavelet_hh_sony_e%04d.pth' % epoch)
+            if lf:
+                torch.save(model_ll.state_dict(), model_dir + 'Wavelet_512ll8_sony_e%04d.pth' % epoch)
+            else:
+                torch.save(model_lh.state_dict(), model_dir + 'Wavelet_lh_sony_e%04d.pth' % epoch)
+                torch.save(model_hl.state_dict(), model_dir + 'Wavelet_hl_sony_e%04d.pth' % epoch)
+                torch.save(model_hh.state_dict(), model_dir + 'Wavelet_hh_sony_e%04d.pth' % epoch)
 print('done training...')
 
